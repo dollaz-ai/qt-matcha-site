@@ -99,18 +99,18 @@
 
           <div class="step-label"><span class="n">2</span>pick your plan</div>
           <div class="opt-grid two" id="plan-grid">
-            <label class="opt-card sel" data-plan="sub">
-              <span class="o-tag">most popular — save 15%</span>
+            <label class="opt-card sel" data-plan="one">
               <input type="radio" name="plan" checked>
-              <div class="o-name">subscribe &amp; save</div>
-              <div class="o-sub">delivered every 30 days · skip or cancel anytime · free gift in box #3</div>
-              <div class="o-price" id="sub-price">$20.40 / delivery</div>
-            </label>
-            <label class="opt-card" data-plan="one">
-              <input type="radio" name="plan">
               <div class="o-name">one-time</div>
-              <div class="o-sub">just this once (we get it)</div>
+              <div class="o-sub">your full ritual, delivered once</div>
               <div class="o-price" id="one-price">$24</div>
+            </label>
+            <label class="opt-card" data-plan="sub" style="pointer-events:none; opacity:.65;">
+              <span class="o-tag">coming soon — save 15%</span>
+              <input type="radio" name="plan" disabled>
+              <div class="o-name">subscribe &amp; save</div>
+              <div class="o-sub">delivered every 30 days · skip or cancel anytime · launching soon</div>
+              <div class="o-price" id="sub-price">$20.40 / delivery</div>
             </label>
           </div>
 
@@ -291,8 +291,17 @@
   <script src="js/main.js"></script>
   <script>
     // buybox pricing
-    const state = { price: 24, was: 28, plan: 'sub', qty: 1, name: 'the packets' };
+    const state = { price: 24, was: 28, plan: 'one', qty: 1, name: 'vanilla' };
     const fmt = (n) => '$' + n.toFixed(2);
+
+    // shopify checkout — cart permalinks per variant
+    const SHOP = 'https://jpx1pk-fk.myshopify.com';
+    const VARIANTS = {
+      'vanilla': '67375152431408',
+      'strawberry': '67375154594096',
+      'coconut': '67375158100272',
+      'the flavor flight': '67375159247152'
+    };
 
     function render() {
       const sub = state.price * 0.85;
@@ -340,7 +349,10 @@
 
     document.getElementById('main-cta').addEventListener('click', (e) => {
       e.preventDefault();
-      e.target.textContent = 'added! (demo — checkout coming soon) 🍵';
+      const variant = VARIANTS[state.name];
+      if (!variant) return;
+      e.target.textContent = 'taking you to checkout… 🍵';
+      window.location.href = SHOP + '/cart/' + variant + ':' + state.qty;
     });
 
     render();
