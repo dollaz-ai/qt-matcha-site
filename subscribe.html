@@ -128,7 +128,12 @@
           </div>
 
           <p id="sub-note" style="text-align:center; font-family:var(--font-display); font-weight:700; color:var(--green-deep); margin:0 0 10px; font-size:0.98rem;">subscribe &amp; save — your daily glow, on&nbsp;autopilot&nbsp;🍵</p>
-          <a href="#" class="btn btn-pink big-cta" id="main-cta">start my ritual →</a>
+          <p style="text-align:center; font-family:var(--font-display); font-weight:700; color:var(--pink-hot); margin:0 0 10px; font-size:0.98rem;">our first production run is almost here — waitlist gets first dibs + launch-day perks 🌸</p>
+          <a href="#" class="btn btn-pink big-cta" id="main-cta">join the waitlist →</a>
+          <form id="waitlist-form" class="news-form" style="display:none; margin:0 0 10px;">
+            <input type="email" placeholder="your email, qt" required>
+            <button type="submit" class="btn btn-pink">save my spot 🍵</button>
+          </form>
           <p class="fine">free shipping on orders $40+ · skip, pause, or cancel in two taps · 30-day glow guarantee</p>
         </div>
       </div>
@@ -321,7 +326,7 @@
       document.getElementById('qty-note').textContent = total >= 40 ? '✓ free shipping unlocked' : '';
       document.getElementById('sticky-price').textContent = fmt(total) + (state.plan === 'sub' ? ' / delivery' : '');
       document.getElementById('main-cta').textContent =
-        (state.plan === 'sub' ? 'start my ritual' : 'add to cart') + ' — ' + fmt(total) + ' →';
+        'join the waitlist — ' + fmt(total) + ' at launch 🍵';
     }
 
     document.querySelectorAll('#format-grid .opt-card').forEach((card) => {
@@ -347,12 +352,13 @@
     document.getElementById('qty-plus').addEventListener('click', () => { state.qty = Math.min(6, state.qty + 1); render(); });
     document.getElementById('qty-minus').addEventListener('click', () => { state.qty = Math.max(1, state.qty - 1); render(); });
 
+    // launch mode: waitlist (checkout wiring stays for launch day — see VARIANTS above)
     document.getElementById('main-cta').addEventListener('click', (e) => {
       e.preventDefault();
-      const variant = VARIANTS[state.name];
-      if (!variant) return;
-      e.target.textContent = 'taking you to checkout… 🍵';
-      window.location.href = SHOP + '/cart/' + variant + ':' + state.qty;
+      e.target.style.display = 'none';
+      const wf = document.getElementById('waitlist-form');
+      wf.style.display = 'flex';
+      wf.querySelector('input[type="email"]').focus();
     });
 
     render();
