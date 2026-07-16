@@ -25,13 +25,15 @@ document.querySelectorAll('.faq-q').forEach((btn) => {
   });
 });
 
-// newsletter (demo only)
+// newsletter → real Shopify customer capture (waitlist)
 document.querySelectorAll('.news-form').forEach((form) => {
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const input = form.querySelector('input');
-    if (input && input.value.trim()) {
-      form.innerHTML = '<p style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--green-dark);">you’re on the list — welcome to the qt club! 🍵</p>';
-    }
+  form.action = 'https://jpx1pk-fk.myshopify.com/contact#newsletter';
+  form.method = 'post';
+  const email = form.querySelector('input[type="email"]');
+  if (email) email.name = 'contact[email]';
+  [['form_type', 'customer'], ['utf8', '✓'], ['contact[tags]', 'newsletter,waitlist']].forEach(([n, v]) => {
+    const h = document.createElement('input');
+    h.type = 'hidden'; h.name = n; h.value = v;
+    form.appendChild(h);
   });
 });
