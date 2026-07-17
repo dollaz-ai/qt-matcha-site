@@ -25,21 +25,77 @@ document.querySelectorAll('.faq-q').forEach((btn) => {
   });
 });
 
-// newsletter + discount popup → real Shopify customer capture (waitlist)
-// Posts into a hidden iframe so the visitor never leaves the page,
-// then shows an inline confirmation. Shopify processes the POST server-side.
+// newsletter + discount popup → email capture (waitlist)
+// Capture posts to a dedicated email tool (Klaviyo or Mailchimp), NOT Shopify —
+// the old /contact form_type=customer path is structurally rejected by stores on
+// Shopify's "New customer accounts" (HTTP 400), so it was removed. See EMAIL-CAPTURE.md
+// for the 10-minute setup; until CAPTURE is configured, forms show an honest
+// "not live yet" message instead of a fake confirmation.
 (() => {
-  const sink = document.createElement('iframe');
-  sink.name = 'qt-capture-sink';
-  sink.style.display = 'none';
-  sink.setAttribute('aria-hidden', 'true');
-  document.body.appendChild(sink);
+  // ---- capture backend config — fill in ONE provider (see EMAIL-CAPTURE.md) ----
+  const CAPTURE = {
+    provider: '',            // 'klaviyo' or 'mailchimp'  ('' = signups not live yet)
+    // Klaviyo: Settings → API keys → "Public API Key / Site ID" (6 chars)…
+    klaviyoCompanyId: '',
+    // …and the List ID of the waitlist list (Lists & Segments → the list → Settings)
+    klaviyoListId: '',
+    // Mailchimp: Audience → Signup forms → Embedded form → copy the <form action="…"> URL
+    // (looks like https://xxxx.usX.list-manage.com/subscribe/post?u=…&id=…)
+    mailchimpFormAction: ''
+  };
+
+  const configured =
+    (CAPTURE.provider === 'klaviyo' && CAPTURE.klaviyoCompanyId && CAPTURE.klaviyoListId) ||
+    (CAPTURE.provider === 'mailchimp' && CAPTURE.mailchimpFormAction);
+
+  // Real cross-origin subscribe with a REAL success/failure answer.
+  // Resolves true only when the provider accepted the email.
+  function subscribe(email, source) {
+    if (!configured) return Promise.resolve(false);
+    if (CAPTURE.provider === 'klaviyo') {
+      // Klaviyo client API — built for browser posts from any site (CORS-enabled).
+      return fetch('https://a.klaviyo.com/client/subscriptions/?company_id=' +
+        encodeURIComponent(CAPTURE.klaviyoCompanyId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'revision': '2024-10-15' },
+        body: JSON.stringify({
+          data: {
+            type: 'subscription',
+            attributes: {
+              profile: { data: { type: 'profile', attributes: {
+                email: email, properties: { source: source || 'website' }
+              } } }
+            },
+            relationships: { list: { data: { type: 'list', id: CAPTURE.klaviyoListId } } }
+          }
+        })
+      }).then((res) => res.ok).catch(() => false);
+    }
+    if (CAPTURE.provider === 'mailchimp') {
+      // Mailchimp JSONP endpoint — same-origin-proof and returns a real result object.
+      return new Promise((resolve) => {
+        const cb = 'qtMcCb' + Date.now();
+        const timer = setTimeout(() => { cleanup(); resolve(false); }, 10000);
+        function cleanup() { clearTimeout(timer); delete window[cb]; script.remove(); }
+        window[cb] = (data) => {
+          const ok = data && (data.result === 'success' ||
+            // "already subscribed" counts as success for the visitor
+            (data.msg || '').toLowerCase().indexOf('already') !== -1);
+          cleanup(); resolve(ok);
+        };
+        const script = document.createElement('script');
+        script.src = CAPTURE.mailchimpFormAction.replace('/subscribe/post?', '/subscribe/post-json?') +
+          '&EMAIL=' + encodeURIComponent(email) + '&c=' + cb;
+        script.onerror = () => { cleanup(); resolve(false); };
+        document.head.appendChild(script);
+      });
+    }
+    return Promise.resolve(false);
+  }
 
   // ---- discount popup (skip subscribe.html, which already has a waitlist form) ----
-  // TEMPORARILY DISABLED: Shopify /contact capture is returning "invalid parameters"
-  // and the confirmation can't detect failure, so we don't want to tell visitors
-  // they're subscribed when they may not be. Flip POPUP_ENABLED back to true once a
-  // clean real signup is confirmed landing in Shopify → Customers.
+  // Enable AFTER capture is configured and one real signup is verified landing in
+  // the email tool (see EMAIL-CAPTURE.md step 4).
   const POPUP_ENABLED = false;
   const onSubscribePage = !!document.getElementById('waitlist-form');
   if (POPUP_ENABLED && !onSubscribePage) buildPopup();
@@ -107,8 +163,8 @@ document.querySelectorAll('.faq-q').forEach((btn) => {
     overlay.querySelector('.qt-pop-dismiss').addEventListener('click', close);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-    // after a successful signup, linger on the confirmation then close
-    overlay.querySelector('.qt-pop-form').addEventListener('submit', () => {
+    // closes after a VERIFIED signup via the qt:subscribed event (fired below)
+    overlay.querySelector('.qt-pop-form').addEventListener('qt:subscribed', () => {
       setTimeout(close, 2800);
     });
 
@@ -126,25 +182,43 @@ document.querySelectorAll('.faq-q').forEach((btn) => {
     }
   }
 
-  // ---- wire every .news-form (page forms + popup) to Shopify capture ----
+  // ---- wire every .news-form (page forms + popup) to the capture backend ----
   document.querySelectorAll('.news-form').forEach((form) => {
-    form.action = 'https://jpx1pk-fk.myshopify.com/contact#newsletter';
-    form.method = 'post';
-    form.target = 'qt-capture-sink';
-    const email = form.querySelector('input[type="email"]');
-    if (email) email.name = 'contact[email]';
-    const tags = form.dataset.tags || 'newsletter,waitlist';
+    const emailInput = form.querySelector('input[type="email"]');
+    if (!emailInput) return;
+    const source = form.dataset.tags || 'newsletter,waitlist';
     const success = form.dataset.success || "you’re on the list — welcome to the qt club! 🍵";
-    [['form_type', 'customer'], ['utf8', '✓'], ['contact[tags]', tags]].forEach(([n, v]) => {
-      const h = document.createElement('input');
-      h.type = 'hidden'; h.name = n; h.value = v;
-      form.appendChild(h);
-    });
-    form.addEventListener('submit', () => {
-      // let the native submission fire into the hidden iframe, then confirm inline
-      setTimeout(() => {
-        form.innerHTML = '<p style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--green-dark);">' + success + '</p>';
-      }, 400);
+
+    let note = null;
+    function showNote(msg) {
+      if (!note) {
+        note = document.createElement('p');
+        note.style.cssText = 'font-family:var(--font-body);font-weight:600;font-size:.85rem;color:var(--pink-hot);margin:8px 0 0;';
+        form.appendChild(note);
+      }
+      note.textContent = msg;
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = emailInput.value.trim();
+      if (!email) return;
+      const btn = form.querySelector('button[type="submit"], button:not([type])');
+      const btnLabel = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = 'adding you…'; }
+
+      subscribe(email, source).then((ok) => {
+        if (ok) {
+          // confirmation ONLY on a verified accept from the provider
+          form.dispatchEvent(new Event('qt:subscribed'));
+          form.innerHTML = '<p style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--green-dark);">' + success + '</p>';
+        } else {
+          if (btn) { btn.disabled = false; btn.textContent = btnLabel; }
+          showNote(configured
+            ? 'hmm — that didn’t go through. mind trying again in a minute?'
+            : 'signups aren’t live just yet — check back soon 🍵');
+        }
+      });
     });
   });
 })();
