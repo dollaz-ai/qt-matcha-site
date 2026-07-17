@@ -36,8 +36,13 @@ document.querySelectorAll('.faq-q').forEach((btn) => {
   document.body.appendChild(sink);
 
   // ---- discount popup (skip subscribe.html, which already has a waitlist form) ----
+  // TEMPORARILY DISABLED: Shopify /contact capture is returning "invalid parameters"
+  // and the confirmation can't detect failure, so we don't want to tell visitors
+  // they're subscribed when they may not be. Flip POPUP_ENABLED back to true once a
+  // clean real signup is confirmed landing in Shopify → Customers.
+  const POPUP_ENABLED = false;
   const onSubscribePage = !!document.getElementById('waitlist-form');
-  if (!onSubscribePage) buildPopup();
+  if (POPUP_ENABLED && !onSubscribePage) buildPopup();
 
   function buildPopup() {
     const style = document.createElement('style');
